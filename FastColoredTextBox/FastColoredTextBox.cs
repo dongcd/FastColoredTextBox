@@ -12,7 +12,6 @@
 
 // #define debug
 
-
 // -------------------------------------------------------------------------------
 // By default the FastColoredTextbox supports no more 16 styles at the same time.
 // This restriction saves memory.
@@ -1350,9 +1349,7 @@ namespace FastColoredTextBoxNS
         /// </summary>
         [Browsable(true)]
         [Localizable(true)]
-        [Editor(
-            "System.ComponentModel.Design.MultilineStringEditor, System.Design, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"
-            , typeof (UITypeEditor))]
+        [Editor("System.ComponentModel.Design.MultilineStringEditor, System.Design, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a", typeof (UITypeEditor))]
         [SettingsBindable(true)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Visible)]
         [Description("Text of the control.")]
@@ -5048,10 +5045,11 @@ namespace FastColoredTextBoxNS
                                                        e.Graphics, e.ClipRectangle));
                 //draw line number
                 if (ShowLineNumbers)
-                    using (var lineNumberBrush = new SolidBrush(LineNumberColor))
-                        e.Graphics.DrawString((iLine + lineNumberStartValue).ToString(), Font, lineNumberBrush,
-                                              new RectangleF(-10, y, LeftIndent - minLeftIndent - 2 + 10, CharHeight),
-                                              new StringFormat(StringFormatFlags.DirectionRightToLeft));
+                using (var lineNumberBrush = new SolidBrush(LineNumberColor))
+                    e.Graphics.DrawString((iLine + lineNumberStartValue).ToString(), Font, lineNumberBrush,
+                                new RectangleF(-10, y, LeftIndent - minLeftIndent - 2 + 10, CharHeight + (int)(lineInterval * 0.5f)),
+                                new StringFormat(StringFormatFlags.DirectionRightToLeft) { LineAlignment = StringAlignment.Center });
+
                 //create markers
                 if (lineInfo.VisibleState == VisibleState.StartOfHiddenBlock)
                     visibleMarkers.Add(new ExpandFoldingMarker(iLine, new Rectangle(LeftIndentLine - 4, y + CharHeight/2 - 3, 8, 8)));
@@ -5068,6 +5066,13 @@ namespace FastColoredTextBoxNS
                 for (int iWordWrapLine = 0; iWordWrapLine < lineInfo.WordWrapStringsCount; iWordWrapLine++)
                 {
                     y = lineInfo.startY + iWordWrapLine*CharHeight - VerticalScroll.Value;
+                    // break if too long line (important for extremly big lines)
+                    if (y > VerticalScroll.Value + ClientSize.Height)
+                        break;
+                    // continue if wordWrapLine isn't seen yet (important for extremly big lines)
+                    if (lineInfo.startY + iWordWrapLine * CharHeight < VerticalScroll.Value)
+                        continue;
+
                     //indent
                     var indent = iWordWrapLine == 0 ? 0 : lineInfo.wordWrapIndent * CharWidth;
                     //draw chars
@@ -5837,7 +5842,7 @@ namespace FastColoredTextBoxNS
             Selection = new Range(this, toX, p.iLine, fromX, p.iLine);
         }
 
-        private int YtoLineIndex(int y)
+        public int YtoLineIndex(int y)
         {
             int i = LineInfos.BinarySearch(new LineInfo(-10), new LineYComparer(y));
             i = i < 0 ? -i - 2 : i;
@@ -5876,6 +5881,15 @@ namespace FastColoredTextBoxNS
                 iLine = FindPrevVisibleLine(iLine);
             //
             int iWordWrapLine = LineInfos[iLine].WordWrapStringsCount;
+
+            //set iWordWrapLine more accurate (important for extremly big lines)
+            if (y > point.Y)
+            {
+                int approximatelyLines = (y - point.Y - CharHeight) / CharHeight;
+                y -= approximatelyLines * CharHeight;
+                iWordWrapLine -= approximatelyLines;
+            }
+
             do
             {
                 iWordWrapLine--;
